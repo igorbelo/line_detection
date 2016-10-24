@@ -10,6 +10,8 @@ from skimage.morphology import square, closing
 
 import community
 
+Y_DISTANCE = 5
+
 def measure_labels(image):
     if image.ndim > 2:
         work_image = (255*color.rgb2gray(image)).astype(np.int32) #convert para escala de cor 0 -255
@@ -60,8 +62,6 @@ def draw_best_partition(graph):
 
 def draw_graph(graph):
     nx.draw(graph, nx.get_node_attributes(graph, 'pos'), node_size=50, font_size=9)
-
-Y_DISTANCE = 5
 
 # image = data.page()
 image = imread("images/1.jpeg")
