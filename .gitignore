@@ -1,0 +1,7 @@
+*scratch*
+.DS_STORE
+*.pyc
+
+#emacs files
+\#*\#
+*~
