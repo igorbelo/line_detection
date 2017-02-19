@@ -14,6 +14,7 @@ import community
 import sys
 import os
 from random import randint
+from ground_truth_reader import build_line_meta
 
 def measure_labels(image):
     if image.ndim > 2:
@@ -109,23 +110,22 @@ def generate_distances_array(regions):
     return distances
 
 def generate_adjacency_matrix(distances):
-    Y_DISTANCE = np.percentile(distances, 5)
+    Y_DISTANCE = np.percentile(distances, 10)
     adjacency_matrix = squareform(distances)
     adjacency_matrix[adjacency_matrix > Y_DISTANCE] = 0
 
     return adjacency_matrix
 
 class Colormap:
-    def __init__(self, *args, **kwargs):
-        self.colors = ['#ffffff','#ff0000','#2200ff','#089f08','#000000']
+    def __init__(self, n, *args, **kwargs):
+        self.colors = ['#ffffff'] + (['#ff0000','#2200ff','#089f08','#000000'] * n)
         self.line_colors_count = len(self.colors)-1
         self.cmap = mpl.colors.ListedColormap(self.colors)
 
-    def translate_color(self, n):
-        return (n % colormap.line_colors_count) + 1
-
 if __name__ == '__main__':
-    image = imread("images/%s" % sys.argv[1])
+    base_file_name = sys.argv[1]
+    # ground_truth = build_line_meta("ground-truth/%s.xml" % base_file_name)
+    image = imread("images/%s.png" % base_file_name)
     binary_image, segmented_image = measure_labels(image)
     regions = measure.regionprops(segmented_image)
     distances = generate_distances_array(regions)
@@ -133,15 +133,18 @@ if __name__ == '__main__':
 
     G = nx.from_numpy_matrix(adjacency_matrix)
     communities = community.best_partition(G)
+    n = max(communities.values())
 
-    colormap = Colormap()
+    colormap = Colormap(n)
 
     img2 = segmented_image.copy()
 
     for label, community in communities.iteritems():
-        img2[img2 == label+1] = colormap.translate_color(community)
+        img2[img2 == label+1] = community+1
 
     img2[img2 == 0] = 0
 
+    print measure.regionprops(img2)[0].bbox
+
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
-    plt.savefig("results/%s" % sys.argv[1])
+    plt.savefig("results/%s.png" % sys.argv[1])
