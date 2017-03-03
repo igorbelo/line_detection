@@ -5,7 +5,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from skimage import data, measure, color
+from skimage import data, measure, color, morphology
 from skimage.io import imread
 from skimage.filters import threshold_adaptive
 from scipy.spatial.distance import pdist, squareform
@@ -24,9 +24,13 @@ def measure_labels(image):
 
     block_size = 41
     binary_adaptive = threshold_adaptive(work_image, block_size, offset=10)
-    segmented_image = measure.label(binary_adaptive, background=1)
+    segmented_image, num_labels = measure.label(
+        binary_adaptive, background=1, return_num=True)
 
-    return (binary_adaptive, segmented_image)
+    other_image = morphology.remove_small_objects(segmented_image, 40)
+    segmented_other_image = measure.label(other_image, background=0)
+
+    return (binary_adaptive, (segmented_other_image, num_labels))
 
 # def create_nodes_from_regions(graph, regions):
 #     """add nodes to graph based on centroid of each segmented element (region)"""
@@ -110,7 +114,7 @@ def generate_distances_array(regions):
     return distances
 
 def generate_adjacency_matrix(distances):
-    Y_DISTANCE = np.percentile(distances, 10)
+    Y_DISTANCE = np.percentile(distances, 2.5)
     adjacency_matrix = squareform(distances)
     adjacency_matrix[adjacency_matrix > Y_DISTANCE] = 0
 
@@ -118,15 +122,16 @@ def generate_adjacency_matrix(distances):
 
 class Colormap:
     def __init__(self, n, *args, **kwargs):
-        self.colors = ['#ffffff'] + (['#ff0000','#2200ff','#089f08','#000000'] * n)
+        self.colors = ['#ffffff'] + (['#ff0000','#2200ff','#089f08','#000000','#f7d308','#397364'] * n)
         self.line_colors_count = len(self.colors)-1
         self.cmap = mpl.colors.ListedColormap(self.colors)
 
 if __name__ == '__main__':
     base_file_name = sys.argv[1]
-    # ground_truth = build_line_meta("ground-truth/%s.xml" % base_file_name)
-    image = imread("images/%s.png" % base_file_name)
-    binary_image, segmented_image = measure_labels(image)
+    ground_truth = build_line_meta("ground-truth/%s.xml" % base_file_name)
+    image = imread("images/%s.tif" % base_file_name)
+    binary_image, segment = measure_labels(image)
+    segmented_image, num_labels = segment
     regions = measure.regionprops(segmented_image)
     distances = generate_distances_array(regions)
     adjacency_matrix = generate_adjacency_matrix(distances)
@@ -142,9 +147,13 @@ if __name__ == '__main__':
     for label, community in communities.iteritems():
         img2[img2 == label+1] = community+1
 
-    img2[img2 == 0] = 0
+    # for i in range(403):
+    #     img2[img2 == i] = 0
+    # # img2[img2 == 0] = 0
 
-    print measure.regionprops(img2)[0].bbox
+    # print ground_truth['1']
+    # print measure.regionprops(img2)[0].bbox
 
+    plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
-    plt.savefig("results/%s.png" % sys.argv[1])
+    plt.savefig("results/%s.eps" % sys.argv[1], format='eps', dpi=900)
