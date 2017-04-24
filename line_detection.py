@@ -27,7 +27,7 @@ def measure_labels(image):
     segmented_image, num_labels = measure.label(
         binary_adaptive, background=1, return_num=True)
 
-    other_image = morphology.remove_small_objects(segmented_image, 40)
+    other_image = morphology.remove_small_objects(segmented_image, 20)
     segmented_other_image = measure.label(other_image, background=0)
 
     return (binary_adaptive, (segmented_other_image, num_labels))
@@ -128,8 +128,8 @@ class Colormap:
 
 if __name__ == '__main__':
     base_file_name = sys.argv[1]
-    ground_truth = build_line_meta("ground-truth/%s.xml" % base_file_name)
-    image = imread("images/%s.tif" % base_file_name)
+    ground_truth = build_line_meta("ground-truth/%s.json" % base_file_name)
+    image = imread("images/%s.png" % base_file_name)
     binary_image, segment = measure_labels(image)
     segmented_image, num_labels = segment
     regions = measure.regionprops(segmented_image)
@@ -147,13 +147,8 @@ if __name__ == '__main__':
     for label, community in communities.iteritems():
         img2[img2 == label+1] = community+1
 
-    # for i in range(403):
-    #     img2[img2 == i] = 0
-    # # img2[img2 == 0] = 0
-
-    # print ground_truth['1']
-    # print measure.regionprops(img2)[0].bbox
+    print len(ground_truth["lines"])
 
     plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
-    plt.savefig("results/%s.eps" % sys.argv[1], format='eps', dpi=900)
+    plt.savefig("results/%s.eps" % sys.argv[1], format='eps', dpi=400)
