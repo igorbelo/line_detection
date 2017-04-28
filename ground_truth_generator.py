@@ -7,6 +7,9 @@ from skimage.filters import threshold_adaptive
 import glob, os, sys, json, itertools
 from distutils.dir_util import mkpath
 from os.path import basename
+import math
+
+SPLIT_SIZE = 30
 
 def extract_connected_components(image):
     if image.ndim > 2:
@@ -27,41 +30,39 @@ def extract_connected_components(image):
 
 class Extractor:
     def __init__(self, segmented_image, *args, **kwargs):
-        self.start_y = None
-        self.end_y = None
+        self.y_clicks = []
         self.lines = []
+        self.splitted_lines = {}
         self.segmented_image = segmented_image
+        self.width = len(segmented_image[0])
+        self.height = len(segmented_image)
 
-    def set_region(self, clicked_y):
-        if self.start_y is None:
-            self.start_y = clicked_y
-        else:
-            self.end_y = clicked_y
-
-    def store_line_boundaries(self, event):
+    def on_click(self, event):
         if event.button == 3:
             clicked_y = event.ydata.astype(int)
-            self.set_region(clicked_y)
-            if self.start_y and self.end_y:
-                min_x, min_y, max_x, max_y = self.get_line_boundaries()
-                line = {
-                    "yTop": min_y+self.start_y,
-                    "yBottom": max_y+self.start_y,
-                    "xLeft": min_x,
-                    "xRight": max_x
-                }
-                self.lines.append(line)
-                self.start_y = self.end_y
-                print "LINHA ADICIONADA"
-                print line
+            self.y_clicks.append(clicked_y)
+            if len(self.y_clicks) > 1:
+                y_limits = self.get_y_click_range()
+                boundaries = self.get_line_boundaries(y_limits=y_limits)
+                self.store_line_boundaries(boundaries)
 
-    def get_line_boundaries(self):
+    def get_line_boundaries(self, **kwargs):
+        x_limits = kwargs.get('x_limits', None)
+        y_limits = kwargs.get('y_limits', None)
+
+        if x_limits:
+            start_x, end_x = x_limits
+        else:
+            start_x, end_x = (0, self.width-1)
+
+        if y_limits:
+            start_y, end_y = y_limits
+        else:
+            start_y, end_y = (0, self.height-1)
+
         regions_props = measure.regionprops(
-            self.segmented_image[self.start_y:self.end_y])
-        min_y = None
-        min_x = None
-        max_y = 0
-        max_x = 0
+            self.segmented_image[start_y:end_y, start_x:end_x])
+        min_y, min_x, max_y, max_x = [None]*4
 
         for prop in regions_props:
             bbox = prop.bbox
@@ -69,35 +70,108 @@ class Extractor:
                 min_y = bbox[0]
             if bbox[1] < min_x or min_x is None:
                 min_x = bbox[1]
-            if bbox[2] > max_y:
+            if bbox[2] > max_y or max_y is None:
                 max_y = bbox[2]
-            if bbox[3] > max_x:
+            if bbox[3] > max_x or max_x is None:
                 max_x = bbox[3]
 
-        print (min_x, min_y, max_x, max_y)
         return (min_x, min_y, max_x, max_y)
+
+    def create_line(self, boundaries, start_y=None, end_y=None):
+        if not start_y:
+            start_y = self.get_start_y()
+        if not end_y:
+            end_y = self.get_end_y()
+        min_x, min_y, max_x, max_y = boundaries
+        return {
+            "yTop": min_y+start_y,
+            "yBottom": max_y+start_y,
+            "xLeft": min_x,
+            "xRight": max_x
+        }
+
+    def store_line_boundaries(self, boundaries):
+        if None not in boundaries:
+            line = self.create_line(boundaries)
+            self.lines.append(line)
+            self.start_y = self.get_end_y()
+            print "LINHA ADICIONADA"
+            print line
+            print self.y_clicks
+
+    def get_y_click_range(self):
+        return self.y_clicks[-2:]
+
+    def get_start_y(self):
+        return self.y_clicks[-2]
+
+    def get_end_y(self):
+        return self.y_clicks[-1]
+
+    def split(self):
+        max_split_width = math.ceil(self.width / float(SPLIT_SIZE))
+        acc = 0
+        for i in range(SPLIT_SIZE):
+            if acc + max_split_width > self.width:
+                split_width = self.width - acc
+            else:
+                split_width = max_split_width
+
+            last_y = None
+            self.splitted_lines[i] = []
+            for y in self.y_clicks:
+                if last_y:
+                    y_limits = (last_y, y)
+                    boundaries = self.get_line_boundaries(y_limits=y_limits, x_limits=(acc, acc+split_width-1))
+                    if not None in boundaries:
+                        line = self.create_line(boundaries, y_limits[0], y_limits[1])
+                        self.splitted_lines[i].append(line)
+                last_y = y
+            acc += split_width
+
+class GroundTruth:
+    def __init__(self, extractor, base_dir, filename, *args, **kwargs):
+        self.extractor = extractor
+        self.ground_truth_path = 'ground-truth/%s' % base_dir
+        self.base_filename = basename(os.path.splitext(filename)[0])
+        self.output_filename = '%s/%s.json' % (self.ground_truth_path, self.base_filename)
+
+    def write(self):
+        mkpath(self.ground_truth_path)
+        if self.extractor.lines or \
+           not os.path.isfile(self.output_filename) or \
+           os.path.getsize(self.output_filename) == 0:
+            with open(self.output_filename, 'w+') as f:
+                f.write(json.dumps({"lines": self.extractor.lines}))
+
+            for i in range(SPLIT_SIZE):
+                output_filename = "%s/%s-%s.json" % (self.ground_truth_path, self.base_filename, str(i).zfill(3))
+                with open(output_filename, 'w+') as f:
+                    f.write(json.dumps({"lines": self.extractor.splitted_lines[i]}))
+
 
 base_dir = sys.argv[1]
 if len(sys.argv) > 2:
-    file_pattern = sys.argv[2]
+    if sys.argv[2] == '--auto-split':
+        auto_split = True
+        file_pattern = base_dir
+    else:
+        auto_split = False
+        file_pattern = sys.argv[2]
 else:
     file_pattern = '*'
+
 filenames = glob.glob('images/%s/%s.png' % (base_dir, file_pattern))
 for filename in filenames:
-    ground_truth_path = 'ground-truth/%s' % base_dir
-    base_filename = basename(os.path.splitext(filename)[0])
     image = imread(filename)
     segmented_image = extract_connected_components(image)
     fig = plt.figure()
-    extractor = Extractor(segmented_image)
-
     plt.imshow(image)
-    fig.canvas.mpl_connect('button_press_event', extractor.store_line_boundaries)
+    extractor = Extractor(segmented_image)
+    ground_truth = GroundTruth(extractor, base_dir, filename)
+    fig.canvas.mpl_connect('button_press_event', extractor.on_click)
     plt.show()
     plt.close()
-    mkpath(ground_truth_path)
-
-    ground_truth_filename = '%s/%s.json' % (ground_truth_path, base_filename)
-    if extractor.lines or not os.path.isfile(ground_truth_filename) or os.path.getsize(ground_truth_filename) == 0:
-        with open(ground_truth_filename, 'w+') as f:
-            f.write(json.dumps({"lines": extractor.lines}))
+    if auto_split:
+        extractor.split()
+    ground_truth.write()
