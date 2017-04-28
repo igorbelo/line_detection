@@ -1,8 +1,12 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from skimage import measure, color, morphology
 from skimage.io import imread
 from skimage.filters import threshold_adaptive
+import glob, os, sys, json, itertools
+from distutils.dir_util import mkpath
+from os.path import basename
 
 def extract_connected_components(image):
     if image.ndim > 2:
@@ -73,10 +77,27 @@ class Extractor:
         print (min_x, min_y, max_x, max_y)
         return (min_x, min_y, max_x, max_y)
 
-image = imread("images/%s.png" % "capitalism001")
-segmented_image = extract_connected_components(image)
-fig = plt.figure()
-extractor = Extractor(segmented_image)
-plt.imshow(image)
-fig.canvas.mpl_connect('button_press_event', extractor.store_line_boundaries)
-plt.show()
+base_dir = sys.argv[1]
+if len(sys.argv) > 2:
+    file_pattern = sys.argv[2]
+else:
+    file_pattern = '*'
+filenames = glob.glob('images/%s/%s.png' % (base_dir, file_pattern))
+for filename in filenames:
+    ground_truth_path = 'ground-truth/%s' % base_dir
+    base_filename = basename(os.path.splitext(filename)[0])
+    image = imread(filename)
+    segmented_image = extract_connected_components(image)
+    fig = plt.figure()
+    extractor = Extractor(segmented_image)
+
+    plt.imshow(image)
+    fig.canvas.mpl_connect('button_press_event', extractor.store_line_boundaries)
+    plt.show()
+    plt.close()
+    mkpath(ground_truth_path)
+
+    ground_truth_filename = '%s/%s.json' % (ground_truth_path, base_filename)
+    if extractor.lines or not os.path.isfile(ground_truth_filename) or os.path.getsize(ground_truth_filename) == 0:
+        with open(ground_truth_filename, 'w+') as f:
+            f.write(json.dumps({"lines": extractor.lines}))
