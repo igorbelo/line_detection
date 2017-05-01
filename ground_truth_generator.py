@@ -108,14 +108,19 @@ class Extractor:
     def get_end_y(self):
         return self.y_clicks[-1]
 
-    def split(self):
+    def get_split_width(self, acc, counter):
         max_split_width = math.ceil(self.width / float(SPLIT_SIZE))
+        if (self.width - acc) % (SPLIT_SIZE - counter) == 0:
+            return (self.width - acc) / (SPLIT_SIZE - counter)
+        else:
+            return max_split_width
+
+
+    def split(self):
         acc = 0
+        counter = 0
         for i in range(SPLIT_SIZE):
-            if acc + max_split_width > self.width:
-                split_width = self.width - acc
-            else:
-                split_width = max_split_width
+            split_width = self.get_split_width(acc, counter)
 
             last_y = None
             self.splitted_lines[i] = []
@@ -128,6 +133,7 @@ class Extractor:
                         self.splitted_lines[i].append(line)
                 last_y = y
             acc += split_width
+            counter += 1
 
 class GroundTruth:
     def __init__(self, extractor, base_dir, filename, *args, **kwargs):
