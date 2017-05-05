@@ -23,7 +23,7 @@ def extract_connected_components(image):
         binary_adaptive, background=1, return_num=True
     )
 
-    clean_image = morphology.remove_small_objects(segmented_image, 5)
+    clean_image = morphology.remove_small_objects(segmented_image, 25)
     segmented_clean_image = measure.label(clean_image, background=0)
 
     return segmented_clean_image
