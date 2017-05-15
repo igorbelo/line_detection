@@ -23,7 +23,7 @@ def extract_connected_components(image):
         binary_adaptive, background=1, return_num=True
     )
 
-    clean_image = morphology.remove_small_objects(segmented_image, 25)
+    clean_image = morphology.remove_small_objects(segmented_image, 15)
     segmented_clean_image = measure.label(clean_image, background=0)
 
     return segmented_clean_image
@@ -115,10 +115,19 @@ class Extractor:
         else:
             return max_split_width
 
-
     def split(self):
         acc = 0
         counter = 0
+        last_y = None
+        for y in self.y_clicks:
+            if last_y:
+                y_limits = (last_y, y)
+                boundaries = self.get_line_boundaries(y_limits=y_limits)
+                if not None in boundaries:
+                    line = self.create_line(boundaries, y_limits[0], y_limits[1])
+                    self.lines.append(line)
+            last_y = y
+        last_y = None
         for i in range(SPLIT_SIZE):
             split_width = self.get_split_width(acc, counter)
 

@@ -32,81 +32,6 @@ def measure_labels(image):
 
     return (binary_adaptive, (segmented_other_image, num_labels))
 
-# def create_nodes_from_regions(graph, regions):
-#     """add nodes to graph based on centroid of each segmented element (region)"""
-#     [graph.add_node(label, pos=(prop.centroid[1], prop.centroid[0])) for label, prop in enumerate(regions)]
-
-# def create_edges_from_regions(graph, regions):
-#     """tie the nodes if the y distance between the nodes is lower than Y_DISTANCE"""
-#     for label, properties in enumerate(regions):
-#         [graph.add_edge(label, destination_label) for destination_label, destination_properties in enumerate(regions) if abs(properties.centroid[0] - destination_properties.centroid[0]) <= Y_DISTANCE]
-
-# def draw_best_partition(partition, graph):
-#     pos = nx.get_node_attributes(graph, 'pos')
-#     size = float(len(set(partition.values())))
-#     count = 0.
-#     colors = ['#%06X' % randint(0, 0xFFFFFF) for _ in set(partition.values())]
-#     for i, com in enumerate(set(partition.values())):
-#         count = count + 1.
-#         list_nodes = [nodes for nodes in partition.keys()
-#                                 if partition[nodes] == com]
-#         nx.draw_networkx_nodes(graph, pos, list_nodes, node_size = 20,
-#                                node_color = colors[i])
-
-#     nx.draw_networkx_edges(graph, pos, edge_color='#ff0000', alpha=0.1, width=1)
-
-# def draw_graph(graph):
-#     nx.draw(graph, nx.get_node_attributes(graph, 'pos'), node_size=25)
-
-# def fill_lines(partition):
-#     colors = ['#%06X' % randint(0, 0xFFFFFF) for _ in range(len(set(partition.values())))]
-
-#     currentAxis = plt.gca()
-#     last_max_x = None
-#     last_community = None
-#     for element_index, community_index in partition.items():
-#         if last_community is not None and last_community != community_index:
-#             last_max_x = None
-
-#         prop = regions[element_index]
-#         min_y, min_x, max_y, max_x = prop.bbox
-
-#         if last_max_x is not None:
-#             min_x = last_max_x
-
-#         currentAxis.add_patch(
-#             Rectangle(
-#                 (min_x, min_y),
-#                 max_x - min_x,
-#                 max_y - min_y,
-#                 alpha=0.1,
-#                 facecolor=colors[community_index],
-#                 edgecolor='none'
-#             )
-#         )
-#         last_max_x = max_x
-#         last_community = community_index
-
-# def generate_step_images(image, binary_image, segmented_image, graph, partition):
-#     path = "steps/%s" % sys.argv[1]
-#     if not os.path.exists(path):
-#         os.makedirs(path)
-
-#     plt.imshow(binary_image, cmap='gray')
-#     plt.savefig("%s/2-binary-image.jpg" % path)
-#     plt.clf()
-#     plt.imshow(segmented_image)
-#     plt.savefig("%s/3-segmented-image.jpg" % path)
-#     plt.clf()
-#     plt.imshow(image)
-#     plt.savefig("%s/1-original-image.jpg" % path)
-#     # draw_best_partition(partition, graph)
-#     plt.savefig("%s/4-graph.jpg" % path)
-#     plt.clf()
-#     plt.imshow(image)
-#     fill_lines(partition)
-#     plt.savefig("%s/5-partition.jpg" % path)
-
 def generate_distances_array(regions):
     centroids_y = np.array([props.centroid[0] for props in regions])
     distances = pdist(centroids_y[:, np.newaxis], metric='cityblock')
@@ -146,8 +71,6 @@ if __name__ == '__main__':
 
     for label, community in communities.iteritems():
         img2[img2 == label+1] = community+1
-
-    print len(ground_truth["lines"])
 
     plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
