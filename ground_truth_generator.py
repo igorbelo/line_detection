@@ -23,7 +23,7 @@ def extract_connected_components(image):
         binary_adaptive, background=1, return_num=True
     )
 
-    clean_image = morphology.remove_small_objects(segmented_image, 15)
+    clean_image = morphology.remove_small_objects(segmented_image, 25)
     segmented_clean_image = measure.label(clean_image, background=0)
 
     return segmented_clean_image
@@ -43,8 +43,32 @@ class Extractor:
             self.y_clicks.append(clicked_y)
             if len(self.y_clicks) > 1:
                 y_limits = self.get_y_click_range()
+                best_y = self.get_best_row(y_limits)
+                del self.y_clicks[-1]
+                self.y_clicks.append(best_y)
+                y_limits = self.get_y_click_range()
                 boundaries = self.get_line_boundaries(y_limits=y_limits)
                 self.store_line_boundaries(boundaries)
+
+    def get_best_row(self, y_limits):
+        i = 0
+        min_length = None
+        min_length_index = None
+        for row in reversed(self.segmented_image[y_limits[0]:y_limits[1]]):
+            diff = set(row)
+            diff_length = len(diff)
+            if diff_length == 1 and next(iter(diff)) == 0:
+                break
+            else:
+                if not min_length or min_length > diff_length:
+                    min_length = diff_length
+                    min_length_index = i
+            i += 1
+
+        if min_length_index:
+            return y_limits[1] - min_length_index
+        else:
+            return y_limits[1] - i
 
     def get_line_boundaries(self, **kwargs):
         x_limits = kwargs.get('x_limits', None)
