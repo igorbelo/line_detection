@@ -3,18 +3,16 @@ import networkx as nx
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 
-from skimage import data, measure, color, morphology
+from skimage import measure, color, morphology
 from skimage.io import imread
 from skimage.filters import threshold_adaptive
 from scipy.spatial.distance import pdist, squareform
 
 import community
 import sys
-import os
-from random import randint
 from ground_truth_reader import build_line_meta
+import draw
 
 def measure_labels(image):
     if image.ndim > 2:
@@ -45,15 +43,9 @@ def generate_adjacency_matrix(distances):
 
     return adjacency_matrix
 
-class Colormap:
-    def __init__(self, n, *args, **kwargs):
-        self.colors = ['#ffffff'] + (['#ff0000','#2200ff','#089f08','#000000','#f7d308','#397364'] * n)
-        self.line_colors_count = len(self.colors)-1
-        self.cmap = mpl.colors.ListedColormap(self.colors)
-
 if __name__ == '__main__':
     base_file_name = sys.argv[1]
-    ground_truth = build_line_meta("ground-truth/%s.json" % base_file_name)
+    # ground_truth = build_line_meta("ground-truth/%s.json" % base_file_name)
     image = imread("images/%s.png" % base_file_name)
     binary_image, segment = measure_labels(image)
     segmented_image, num_labels = segment
@@ -65,7 +57,7 @@ if __name__ == '__main__':
     communities = community.best_partition(G)
     n = max(communities.values())
 
-    colormap = Colormap(n)
+    colormap = draw.Colormap(n)
 
     img2 = segmented_image.copy()
 
@@ -75,3 +67,4 @@ if __name__ == '__main__':
     plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
     plt.savefig("results/%s.eps" % sys.argv[1], format='eps', dpi=400)
+    draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions)
