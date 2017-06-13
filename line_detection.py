@@ -92,21 +92,26 @@ def get_distances_between_components(binary_image, regions):
     return distances
 
 if __name__ == '__main__':
-    base_file_name = sys.argv[1]
-    # ground_truth = build_line_meta("ground-truth/%s.json" % base_file_name)
-    image = imread("images/%s.png" % base_file_name)
-    binary_image, segment = measure_labels(image)
-    segmented_image, _ = segment
-    binary_image_uint = img_as_ubyte(binary_image)
-    regions = measure.regionprops(segmented_image)
-    distances = get_distances_between_components(binary_image_uint, regions)
+    # base_file_name = sys.argv[1]
+    base_dir = sys.argv[1]
+    for i in range(30):
+        filename = '%s-%s' % (base_dir, str(i).zfill(3))
+        image = imread("images/%s/%s.png" % (base_dir, filename))
+        ground_truth = build_line_meta("ground-truth/%s/%s.json" % (base_dir, filename))
+        binary_image, segment = measure_labels(image)
+        segmented_image, _ = segment
+        binary_image_uint = img_as_ubyte(binary_image)
+        regions = measure.regionprops(segmented_image)
+        distances = get_distances_between_components(binary_image_uint, regions)
 
-    # distances = generate_distances_array(regions)
-    # adjacency_matrix = generate_adjacency_matrix(distances)
+        # distances = generate_distances_array(regions)
+        # adjacency_matrix = generate_adjacency_matrix(distances)
 
-    # G = nx.from_numpy_matrix(adjacency_matrix)
+        # G = nx.from_numpy_matrix(adjacency_matrix)
+        if distances:
+            G = generate_graph(distances, regions)
+            communities = community.best_partition(G)
+            draw.result(segmented_image, communities, 'results/%s' % base_dir, filename+'.png', 'png')
+            draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s' % filename)
 
-    G = generate_graph(distances, regions)
-    communities = community.best_partition(G)
-    draw.result(segmented_image, communities)
-    draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions)
+        plt.clf()

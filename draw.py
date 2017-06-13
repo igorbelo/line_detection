@@ -55,24 +55,26 @@ def fill_lines(partition, regions):
         last_max_x = max_x
         last_community = community_index
 
-def generate_step_images(image, binary_image, segmented_image, graph, partition, regions):
-    path = "steps/%s" % sys.argv[1]
-    if not os.path.exists(path):
-        os.makedirs(path)
+def generate_step_images(image, binary_image, segmented_image, graph, partition, regions, write_on):
+    if not os.path.exists(write_on):
+        os.makedirs(write_on)
 
     plt.imshow(binary_image, cmap='gray')
-    plt.savefig("%s/2-binary-image.png" % path, format='png', dpi=300)
+    plt.savefig("%s/2-binary-image.png" % write_on, format='png', dpi=300)
     plt.clf()
     plt.imshow(segmented_image)
-    plt.savefig("%s/3-segmented-image.png" % path, format='png', dpi=300)
+    plt.savefig("%s/3-segmented-image.png" % write_on, format='png', dpi=300)
     plt.clf()
     plt.imshow(image)
-    plt.savefig("%s/1-original-image.png" % path, format='png', dpi=300)
+    plt.savefig("%s/1-original-image.png" % write_on, format='png', dpi=300)
     draw_best_partition(partition, graph, regions)
     plt.axis('off')
-    plt.savefig("%s/4-graph.png" % path, format='png', dpi=300)
+    plt.savefig("%s/4-graph.png" % write_on, format='png', dpi=300)
 
-def result(segmented_image, communities):
+def result(segmented_image, communities, write_on, filename, format='png'):
+    if not os.path.exists(write_on):
+        os.makedirs(write_on)
+
     n = max(communities.values())
     colormap = Colormap(n)
 
@@ -82,4 +84,4 @@ def result(segmented_image, communities):
 
     plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
-    plt.savefig("results/%s.png" % sys.argv[1], format='png', dpi=400)
+    plt.savefig("%s/%s" % (write_on, filename), format=format, dpi=400)
