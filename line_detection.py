@@ -4,7 +4,7 @@ import networkx as nx
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from skimage import measure, color, morphology
+from skimage import measure, color, morphology, img_as_ubyte
 from skimage.io import imread
 from skimage.filters import threshold_adaptive
 from scipy.spatial.distance import pdist, squareform
@@ -13,6 +13,7 @@ import community
 import sys
 from ground_truth_reader import build_line_meta
 import draw
+import cv2
 
 def measure_labels(image):
     if image.ndim > 2:
@@ -43,28 +44,69 @@ def generate_adjacency_matrix(distances):
 
     return adjacency_matrix
 
+def create_mask(binary_image):
+    return np.full_like(binary_image_uint, 255, dtype=np.uint8)
+
+def put_component_on_mask(mask, coords):
+    y, x = np.hsplit(coords, 2)
+    mask[y, x] = 0
+
+def distance_between_two_components(d1, c2, c2_coords):
+    y, x = np.hsplit(c2_coords, 2)
+    return min(d1[y, x])[0]
+
+def create_nodes(graph, regions):
+    for label, prop in enumerate(regions):
+        graph.add_node(label, pos=prop.centroid)
+
+def generate_graph(distances, regions):
+    G = nx.Graph()
+    create_nodes(G, regions)
+    flat_distances = [item for sublist in distances for item in sublist]
+    threshold = np.percentile(flat_distances, 1.5)
+    for i, props in enumerate(regions[:-1]):
+        distances_from_component = distances[i]
+        for j, d in enumerate(distances_from_component, i+1):
+            if d <= threshold:
+                G.add_edge(i, j)
+
+    return G
+
+def get_distances_between_components(binary_image, regions):
+    distances = []
+
+    for i, props in enumerate(regions):
+        c1 = create_mask(binary_image)
+        put_component_on_mask(c1, props.coords)
+        d1 = cv2.distanceTransform(c1, cv2.NORM_L2,
+                                   cv2.DIST_MASK_PRECISE)
+
+        distances.append([])
+
+        for j, props2 in enumerate(regions[i+1:]):
+            c2 = create_mask(binary_image)
+            put_component_on_mask(c2, props2.coords)
+            d = distance_between_two_components(d1, c2, props2.coords)
+            distances[i].append(d)
+
+    return distances
+
 if __name__ == '__main__':
     base_file_name = sys.argv[1]
     # ground_truth = build_line_meta("ground-truth/%s.json" % base_file_name)
     image = imread("images/%s.png" % base_file_name)
     binary_image, segment = measure_labels(image)
-    segmented_image, num_labels = segment
+    segmented_image, _ = segment
+    binary_image_uint = img_as_ubyte(binary_image)
     regions = measure.regionprops(segmented_image)
-    distances = generate_distances_array(regions)
-    adjacency_matrix = generate_adjacency_matrix(distances)
+    distances = get_distances_between_components(binary_image_uint, regions)
 
-    G = nx.from_numpy_matrix(adjacency_matrix)
+    # distances = generate_distances_array(regions)
+    # adjacency_matrix = generate_adjacency_matrix(distances)
+
+    # G = nx.from_numpy_matrix(adjacency_matrix)
+
+    G = generate_graph(distances, regions)
     communities = community.best_partition(G)
-    n = max(communities.values())
-
-    colormap = draw.Colormap(n)
-
-    img2 = segmented_image.copy()
-
-    for label, community in communities.iteritems():
-        img2[img2 == label+1] = community+1
-
-    plt.axis('off')
-    plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
-    plt.savefig("results/%s.eps" % sys.argv[1], format='eps', dpi=400)
+    draw.result(segmented_image, communities)
     draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions)

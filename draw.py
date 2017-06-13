@@ -1,6 +1,7 @@
 import sys
 import os
 import networkx as nx
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from random import randint
 from matplotlib.patches import Rectangle
@@ -20,7 +21,7 @@ def draw_best_partition(partition, graph, regions):
         count = count + 1.
         list_nodes = [nodes for nodes in partition.keys()
                                 if partition[nodes] == com]
-        nx.draw_networkx_nodes(graph, centroids, list_nodes, node_size = 5,
+        nx.draw_networkx_nodes(graph, centroids, list_nodes, node_size = 1,
                                node_color = colors[i])
 
     nx.draw_networkx_edges(graph, centroids, edge_color='#ff0000', alpha=0.1, width=1)
@@ -68,8 +69,17 @@ def generate_step_images(image, binary_image, segmented_image, graph, partition,
     plt.imshow(image)
     plt.savefig("%s/1-original-image.png" % path, format='png', dpi=300)
     draw_best_partition(partition, graph, regions)
+    plt.axis('off')
     plt.savefig("%s/4-graph.png" % path, format='png', dpi=300)
-    plt.clf()
-    plt.imshow(image)
-    fill_lines(partition, regions)
-    plt.savefig("%s/5-partition.png" % path, format='png', dpi=300)
+
+def result(segmented_image, communities):
+    n = max(communities.values())
+    colormap = Colormap(n)
+
+    img2 = segmented_image.copy()
+    for label, community in communities.iteritems():
+        img2[img2 == label+1] = community+1
+
+    plt.axis('off')
+    plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
+    plt.savefig("results/%s.png" % sys.argv[1], format='png', dpi=400)
