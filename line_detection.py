@@ -26,10 +26,10 @@ def measure_labels(image):
     segmented_image, num_labels = measure.label(
         binary_adaptive, background=1, return_num=True)
 
-    other_image = morphology.remove_small_objects(segmented_image, 20)
-    segmented_other_image = measure.label(other_image, background=0)
+    # other_image = morphology.remove_small_objects(segmented_image, 10)
+    # segmented_other_image = measure.label(other_image, background=0)
 
-    return (binary_adaptive, (segmented_other_image, num_labels))
+    return (binary_adaptive, (segmented_image, num_labels))
 
 def generate_distances_array(regions):
     centroids_y = np.array([props.centroid[0] for props in regions])
@@ -38,7 +38,7 @@ def generate_distances_array(regions):
     return distances
 
 def generate_adjacency_matrix(distances):
-    Y_DISTANCE = np.percentile(distances, 2.5)
+    Y_DISTANCE = np.percentile(distances, 5)
     adjacency_matrix = squareform(distances)
     adjacency_matrix[adjacency_matrix > Y_DISTANCE] = 0
 
@@ -53,11 +53,11 @@ def put_component_on_mask(mask, coords):
 
 def distance_between_two_components(d1, c2, c2_coords):
     y, x = np.hsplit(c2_coords, 2)
-    return min(d1[y, x])[0]
+    return min(d1[y, x])
 
 def create_nodes(graph, regions):
-    for label, prop in enumerate(regions):
-        graph.add_node(label, pos=prop.centroid)
+    for prop in regions:
+        graph.add_node(prop.label, pos=prop.centroid)
 
 def generate_graph(distances, regions):
     G = nx.Graph()
@@ -68,7 +68,7 @@ def generate_graph(distances, regions):
         distances_from_component = distances[i]
         for j, d in enumerate(distances_from_component, i+1):
             if d <= threshold:
-                G.add_edge(i, j)
+                G.add_edge(i+1, j+1)
 
     return G
 
@@ -83,7 +83,7 @@ def get_distances_between_components(binary_image, regions):
 
         distances.append([])
 
-        for j, props2 in enumerate(regions[i+1:]):
+        for props2 in regions[i+1:]:
             c2 = create_mask(binary_image)
             put_component_on_mask(c2, props2.coords)
             d = distance_between_two_components(d1, c2, props2.coords)
@@ -91,10 +91,27 @@ def get_distances_between_components(binary_image, regions):
 
     return distances
 
+def calculate_accuracy(ground_truth, regions, communities):
+    total = max(communities.values())
+    total_lines = len(ground_truth)
+    total_components = len(regions)
+    found = 0
+    for label, community in communities.iteritems():
+        if community < total_lines:
+            line = ground_truth[community]
+            y_top, x_left, y_bottom, x_right = regions[label].bbox
+            if y_top >= line["yTop"] and y_bottom <= line["yBottom"] and\
+               x_left >= line["xLeft"] and x_right <= line["xRight"]:
+                found += 1
+
+    print (float(found) / total_components) * 100.0
+
+
+
 if __name__ == '__main__':
     # base_file_name = sys.argv[1]
     base_dir = sys.argv[1]
-    for i in range(30):
+    for i in range(4, 5):
         filename = '%s-%s' % (base_dir, str(i).zfill(3))
         image = imread("images/%s/%s.png" % (base_dir, filename))
         ground_truth = build_line_meta("ground-truth/%s/%s.json" % (base_dir, filename))
@@ -102,7 +119,8 @@ if __name__ == '__main__':
         segmented_image, _ = segment
         binary_image_uint = img_as_ubyte(binary_image)
         regions = measure.regionprops(segmented_image)
-        distances = get_distances_between_components(binary_image_uint, regions)
+        distances = get_distances_between_components(
+            binary_image_uint, regions)
 
         # distances = generate_distances_array(regions)
         # adjacency_matrix = generate_adjacency_matrix(distances)
@@ -111,6 +129,7 @@ if __name__ == '__main__':
         if distances:
             G = generate_graph(distances, regions)
             communities = community.best_partition(G)
+            # result = calculate_accuracy(ground_truth, regions, communities)
             draw.result(segmented_image, communities, 'results/%s' % base_dir, filename+'.png', 'png')
             draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s' % filename)
 

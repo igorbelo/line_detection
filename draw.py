@@ -5,6 +5,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from random import randint
 from matplotlib.patches import Rectangle
+import itertools
+from skimage import measure
 
 class Colormap:
     def __init__(self, n, *args, **kwargs):
@@ -13,18 +15,16 @@ class Colormap:
         self.cmap = mpl.colors.ListedColormap(self.colors)
 
 def draw_best_partition(partition, graph, regions):
-    centroids = {i: region.centroid[::-1] for i, region in enumerate(regions)}
+    n = max(partition.values())
+    colormap = Colormap(n)
+    centroids = {region.label: region.centroid[::-1] for region in regions}
     size = float(len(set(partition.values())))
-    count = 0.
-    colors = ['#%06X' % randint(0, 0xFFFFFF) for _ in set(partition.values())]
-    for i, com in enumerate(set(partition.values())):
-        count = count + 1.
-        list_nodes = [nodes for nodes in partition.keys()
-                                if partition[nodes] == com]
-        nx.draw_networkx_nodes(graph, centroids, list_nodes, node_size = 1,
-                               node_color = colors[i])
-
-    nx.draw_networkx_edges(graph, centroids, edge_color='#ff0000', alpha=0.1, width=1)
+    colors = colormap.colors
+    for community, nodes in itertools.groupby(
+            partition,
+            lambda item: partition[item]):
+        nx.draw_networkx_nodes(graph, centroids, list(nodes), node_size = 1,
+                               node_color = colors[community+1])
 
 def fill_lines(partition, regions):
     colors = ['#%06X' % randint(0, 0xFFFFFF) for _ in range(len(set(partition.values())))]
@@ -79,8 +79,9 @@ def result(segmented_image, communities, write_on, filename, format='png'):
     colormap = Colormap(n)
 
     img2 = segmented_image.copy()
+    regions = measure.regionprops(img2)
     for label, community in communities.iteritems():
-        img2[img2 == label+1] = community+1
+        img2[img2 == label] = community+1
 
     plt.axis('off')
     plt.imshow(img2, vmin=0, vmax=len(colormap.colors), cmap=colormap.cmap)
