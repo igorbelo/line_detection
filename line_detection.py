@@ -31,19 +31,6 @@ def measure_labels(image):
 
     return (binary_adaptive, (segmented_image, num_labels))
 
-def generate_distances_array(regions):
-    centroids_y = np.array([props.centroid[0] for props in regions])
-    distances = pdist(centroids_y[:, np.newaxis], metric='cityblock')
-
-    return distances
-
-def generate_adjacency_matrix(distances):
-    Y_DISTANCE = np.percentile(distances, 5)
-    adjacency_matrix = squareform(distances)
-    adjacency_matrix[adjacency_matrix > Y_DISTANCE] = 0
-
-    return adjacency_matrix
-
 def create_mask(binary_image):
     return np.full_like(binary_image_uint, 255, dtype=np.uint8)
 
@@ -64,11 +51,13 @@ def generate_graph(distances, regions):
     create_nodes(G, regions)
     flat_distances = [item for sublist in distances for item in sublist]
     threshold = np.percentile(flat_distances, 1.5)
-    for i, props in enumerate(regions[:-1]):
-        distances_from_component = distances[i]
-        for j, d in enumerate(distances_from_component, i+1):
+    for props in regions[:-1]:
+        label = props.label
+        index = label-1
+        distances_from_component = distances[index]
+        for j, d in enumerate(distances_from_component, label+1):
             if d <= threshold:
-                G.add_edge(i+1, j+1)
+                G.add_edge(label, j)
 
     return G
 
@@ -109,9 +98,8 @@ def calculate_accuracy(ground_truth, regions, communities):
 
 
 if __name__ == '__main__':
-    # base_file_name = sys.argv[1]
     base_dir = sys.argv[1]
-    for i in range(4, 5):
+    for i in range(30):
         filename = '%s-%s' % (base_dir, str(i).zfill(3))
         image = imread("images/%s/%s.png" % (base_dir, filename))
         ground_truth = build_line_meta("ground-truth/%s/%s.json" % (base_dir, filename))
@@ -122,15 +110,11 @@ if __name__ == '__main__':
         distances = get_distances_between_components(
             binary_image_uint, regions)
 
-        # distances = generate_distances_array(regions)
-        # adjacency_matrix = generate_adjacency_matrix(distances)
-
-        # G = nx.from_numpy_matrix(adjacency_matrix)
         if distances:
             G = generate_graph(distances, regions)
             communities = community.best_partition(G)
             # result = calculate_accuracy(ground_truth, regions, communities)
             draw.result(segmented_image, communities, 'results/%s' % base_dir, filename+'.png', 'png')
-            draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s' % filename)
+            draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s/%s' % (base_dir, filename))
 
         plt.clf()
