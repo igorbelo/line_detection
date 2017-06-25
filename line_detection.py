@@ -16,6 +16,7 @@ import draw
 import cv2
 import peakutils
 from peakutils.plot import plot as pplot
+import json
 
 OVERLAP_RATIO = 0.5
 Y_DISTANCE_THRESHOLD = 5 # in pixels
@@ -98,20 +99,36 @@ def calculate_accuracy(ground_truth, regions, communities):
     total_lines = len(ground_truth)
     total_components = len(regions)
     found = 0
-    print ground_truth
     for label, community in communities.iteritems():
         if community < total_lines:
             line = ground_truth[community]
-            y_top, x_left, y_bottom, x_right = regions[label].bbox
+            y_top, x_left, y_bottom, x_right = regions[label-1].bbox
             if y_top >= line["yTop"] and y_bottom <= line["yBottom"] and\
                x_left >= line["xLeft"] and x_right <= line["xRight"]:
                 found += 1
 
     return (float(found) / total_components) * 100.0
 
+def store_result(base_dir, filename, regions, communities):
+    store_at = "results/%s/%s.json" % (base_dir, filename)
+    print store_at
+    ccs = []
+    for prop in regions:
+        y_top, x_left, y_bottom, x_right = prop.bbox
+        ccs.append({'y_top': y_top,
+                    'x_left': x_left,
+                    'y_bottom': y_bottom,
+                    'x_right': x_right,
+                    'community': communities[prop.label]})
+
+    with open(store_at, 'w+') as f:
+        f.write(json.dumps(ccs))
+
+
+
 if __name__ == '__main__':
     base_dir = sys.argv[1]
-    for i in range(3, 4):
+    for i in range(30):
         filename = '%s-%s' % (base_dir, str(i).zfill(3))
         image = imread("images/%s/%s.png" % (base_dir, filename))
         ground_truth = build_line_meta("ground-truth/%s/%s.json" % (base_dir, filename))
@@ -125,9 +142,9 @@ if __name__ == '__main__':
         if distances:
             G = generate_graph(distances, regions)
             communities = community.best_partition(G)
-            result = calculate_accuracy(ground_truth, regions, communities)
-            print str(i).zfill(3), result
+            # result = calculate_accuracy(ground_truth, regions, communities)
             draw.result(segmented_image, communities, 'results/%s' % base_dir, filename+'.png', 'png')
             draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s/%s' % (base_dir, filename))
+            store_result(base_dir, filename, regions, communities)
 
         plt.clf()
