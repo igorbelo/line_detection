@@ -94,21 +94,6 @@ def get_distances_between_components(binary_image, regions):
 
     return distances
 
-def calculate_accuracy(ground_truth, regions, communities):
-    total = max(communities.values())
-    total_lines = len(ground_truth)
-    total_components = len(regions)
-    found = 0
-    for label, community in communities.iteritems():
-        if community < total_lines:
-            line = ground_truth[community]
-            y_top, x_left, y_bottom, x_right = regions[label-1].bbox
-            if y_top >= line["yTop"] and y_bottom <= line["yBottom"] and\
-               x_left >= line["xLeft"] and x_right <= line["xRight"]:
-                found += 1
-
-    return (float(found) / total_components) * 100.0
-
 def store_result(base_dir, filename, regions, communities):
     store_at = "results/%s/%s.json" % (base_dir, filename)
     print store_at
@@ -142,7 +127,6 @@ if __name__ == '__main__':
         if distances:
             G = generate_graph(distances, regions)
             communities = community.best_partition(G)
-            # result = calculate_accuracy(ground_truth, regions, communities)
             draw.result(segmented_image, communities, 'results/%s' % base_dir, filename+'.png', 'png')
             draw.generate_step_images(image, binary_image, segmented_image, G, communities, regions, 'steps/%s/%s' % (base_dir, filename))
             store_result(base_dir, filename, regions, communities)
