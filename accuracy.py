@@ -6,6 +6,8 @@ import numpy as np
 import json
 import itertools
 import cv2
+import glob
+import os
 
 MATCH_THRESHOLD = 0.8
 
@@ -67,23 +69,50 @@ def match_score(h_mask, r_mask):
     N_union = (cv2.bitwise_or(h_mask,r_mask) > 0).sum()
     return float(N_inter) / N_union
 
-# filename = sys.argv[1]
-segmented_image = get_segmented_image("images/undersea016/undersea016-006.png")
+folders = [os.path.basename(folder) for folder in glob.glob("images/*")]
+result = {}
+for folder in folders:
+    result[folder] = {'strips': {}}
+    processed_strips = 0
+    accuracy = 0
+    for i in range(30):
+        strip_name = "%s-%s" % (folder, str(i).zfill(3))
+        image_path = "images/%s/%s.png" % (folder, strip_name)
+        ground_truth_path = "ground-truth/%s/%s.json" % (folder, strip_name)
+        result_path = "results/%s/%s.json" % (folder, strip_name)
+        print "PROCESSANDO %s..." % strip_name
+        if os.path.isfile(image_path) and\
+           os.path.isfile(ground_truth_path) and\
+           os.path.isfile(result_path):
+            segmented_image = get_segmented_image(image_path)
 
-R_lines = load_ground_truth_lines("ground-truth/undersea016/undersea016-006.json")
-H_lines = load_hypothesis_lines("results/undersea016/undersea016-006.json")
+            R_lines = load_ground_truth_lines(ground_truth_path)
+            H_lines = load_hypothesis_lines(result_path)
 
-matches = 0
-for h_line in H_lines:
-    h_mask = create_h_mask(segmented_image, h_line)
+            if R_lines:
+                matches = 0
+                for h_line in H_lines:
+                    h_mask = create_h_mask(segmented_image, h_line)
 
-    for r_line in R_lines:
-        r_mask = create_r_mask(segmented_image, r_line)
+                    for r_line in R_lines:
+                        r_mask = create_r_mask(segmented_image, r_line)
 
-        if match_score(h_mask, r_mask) >= MATCH_THRESHOLD:
-            matches += 1
+                        if match_score(h_mask, r_mask) >= MATCH_THRESHOLD:
+                            matches += 1
 
-DR = float(matches) / len(R_lines)
-RA = float(matches) / len(H_lines)
+                DR = float(matches) / len(R_lines)
+                RA = float(matches) / len(H_lines)
 
-error = 1 - (((2 * DR * RA)) / (DR + RA))
+                if DR or RA:
+                    error = 1 - (((2 * DR * RA)) / (DR + RA))
+                    result[folder]['strips'][strip_name] = {
+                        'accuracy': 1 - error, 'error': error, 'processed': True}
+                    processed_strips += 1
+                    accuracy += 1 - error
+        else:
+            result[folder]['strips'][strip_name] = {'processed': False}
+
+    result[folder]['overall'] = float(accuracy) / processed_strips
+
+with open("overall_result.json", "w+") as f:
+    f.write(json.dumps(result, sort_keys=True))
